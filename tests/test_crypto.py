@@ -15,8 +15,27 @@ from core.crypto import (
     wrap_onion,
     peel_onion_layer,
     unwrap_onion_response,
+    pad_cell,
+    unpad_cell,
+    zeroize_bytes,
+    CELL_SIZE,
 )
 from cryptography.exceptions import InvalidTag
+
+
+def test_fixed_cell_padding():
+    payload = b"GET genesis.spectre SPECTRE/1.0"
+    cell = pad_cell(payload)
+    assert len(cell) == CELL_SIZE
+    unpadded = unpad_cell(cell)
+    assert unpadded == payload
+
+
+def test_zeroize_bytes_memory():
+    secret_key = bytearray(b"super_secret_32bytes_sessionkey!")
+    assert len(secret_key) == 32
+    zeroize_bytes(secret_key)
+    assert secret_key == bytearray(32)
 
 
 def test_ed25519_identity_and_signature():
@@ -67,7 +86,7 @@ def test_3hop_onion_wrap_and_peel():
     exit_key = derive_symmetric_key(b"exit_secret")
 
     keys = [guard_key, relay_key, exit_key]
-    payload = b"GET genesis.spectre SPECTRE/1.0"
+    payload = pad_cell(b"GET genesis.spectre SPECTRE/1.0")
 
     # Client wraps onion (Exit -> Relay -> Guard)
     wrapped = wrap_onion(payload, keys)
@@ -81,7 +100,7 @@ def test_3hop_onion_wrap_and_peel():
     # Hop 3: Exit peels inner layer
     peeled_exit = peel_onion_layer(peeled_relay, exit_key)
 
-    assert peeled_exit == payload
+    assert unpad_cell(peeled_exit) == b"GET genesis.spectre SPECTRE/1.0"
 
 
 def test_onion_response_unwrap():
@@ -90,7 +109,7 @@ def test_onion_response_unwrap():
     exit_key = derive_symmetric_key(b"exit_secret")
 
     keys = [guard_key, relay_key, exit_key]
-    raw_response = b"SPECTRE/1.0 200 OK\r\n\r\n# Welcome to Genesis Page"
+    raw_response = pad_cell(b"SPECTRE/1.0 200 OK\r\n\r\n# Welcome to Genesis Page")
 
     # Response path: Exit encrypts with exit_key, Relay encrypts with relay_key, Guard encrypts with guard_key
     resp_exit = encrypt_payload(exit_key, raw_response)
@@ -99,4 +118,4 @@ def test_onion_response_unwrap():
 
     # Client unwraps response in order: Guard -> Relay -> Exit
     unwrapped = unwrap_onion_response(resp_guard, keys)
-    assert unwrapped == raw_response
+    assert unpad_cell(unwrapped) == b"SPECTRE/1.0 200 OK\r\n\r\n# Welcome to Genesis Page"

@@ -1,10 +1,51 @@
 import os
+import struct
 from typing import List, Tuple
 from cryptography.hazmat.primitives.asymmetric import ed25519, x25519
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives import hashes
 from cryptography.exceptions import InvalidSignature, InvalidTag
+
+CELL_SIZE = 512  # Fixed 512-byte cell size to prevent packet size side-channel analysis
+
+
+# --- Cell Padding & Anti-Traffic Analysis Helpers ---
+
+def pad_cell(payload: bytes) -> bytes:
+    """
+    Pads payload to fixed 512-byte CELL_SIZE.
+    Format: 2-byte big-endian payload length + payload + random padding.
+    """
+    payload_len = len(payload)
+    max_payload = CELL_SIZE - 2
+    if payload_len > max_payload:
+        raise ValueError(f"Payload length {payload_len} exceeds max padded cell capacity {max_payload}")
+
+    header = struct.pack(">H", payload_len)
+    padding_needed = max_payload - payload_len
+    padding = os.urandom(padding_needed)
+    return header + payload + padding
+
+
+def unpad_cell(cell_data: bytes) -> bytes:
+    """
+    Unpads a fixed 512-byte cell payload.
+    Extracts 2-byte length and returns original payload bytes.
+    """
+    if len(cell_data) != CELL_SIZE:
+        raise ValueError(f"Invalid cell size {len(cell_data)}, expected {CELL_SIZE}")
+
+    payload_len = struct.unpack(">H", cell_data[:2])[0]
+    return cell_data[2: 2 + payload_len]
+
+
+# --- Zeroize Key Memory Helper ---
+
+def zeroize_bytes(buffer: bytearray) -> None:
+    """Securely overwrites bytearray memory in place with zeros."""
+    for i in range(len(buffer)):
+        buffer[i] = 0
 
 
 # --- Ed25519 Identity Key Helpers ---
@@ -85,7 +126,7 @@ def derive_symmetric_key(shared_secret: bytes, salt: bytes = None, info: bytes =
 
 def encrypt_payload(key: bytes, plaintext: bytes) -> bytes:
     """
-    Encrypts plaintext using ChaCha20-Poly1305.
+    Encrypts plaintext using ChaCha20-Poly1305 AEAD.
     Returns: 12-byte random nonce + ciphertext (with Poly1305 tag).
     """
     chacha = ChaCha20Poly1305(key)
@@ -96,7 +137,7 @@ def encrypt_payload(key: bytes, plaintext: bytes) -> bytes:
 
 def decrypt_payload(key: bytes, ciphertext_with_nonce: bytes) -> bytes:
     """
-    Decrypts ciphertext_with_nonce using ChaCha20-Poly1305.
+    Decrypts ciphertext_with_nonce using ChaCha20-Poly1305 AEAD.
     Expects 12-byte nonce prefixed to ciphertext.
     Raises InvalidTag if decryption fails.
     """

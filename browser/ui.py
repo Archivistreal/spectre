@@ -1,5 +1,4 @@
 import sys
-import re
 import asyncio
 from typing import Optional, List, Tuple
 from PyQt6.QtWidgets import (
@@ -19,110 +18,9 @@ from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from core.node import SpectreClientCircuit
 
 
-def render_spectre_markup_to_html(markup_text: str) -> str:
-    """
-    Parses .spectre markup format and converts it to HTML for QTextBrowser.
-    Supported elements:
-    - Headers: `# Header 1`, `## Header 2`, `### Header 3`
-    - Bold text: `**text**`
-    - Blockquotes: `> quote`
-    - Links: `[label](target.spectre)` -> `<a href="target.spectre">label</a>`
-    - Code blocks: ```spectre ... ```
-    - Lists: `- item` or `1. item`
-    """
-    lines = markup_text.splitlines()
-    html_lines = []
-    in_code_block = False
-    code_block_lines = []
-
-    for line in lines:
-        if line.strip().startswith("```"):
-            if in_code_block:
-                # Close code block
-                code_content = "\n".join(code_block_lines)
-                html_lines.append(
-                    f'<pre style="background-color: #1e1e2e; color: #a6e3a1; padding: 10px; border-radius: 6px; font-family: monospace;">{code_content}</pre>'
-                )
-                code_block_lines = []
-                in_code_block = False
-            else:
-                in_code_block = True
-            continue
-
-        if in_code_block:
-            code_block_lines.append(line)
-            continue
-
-        # Parse headers
-        if line.startswith("# "):
-            html_lines.append(f'<h1 style="color: #89b4fa; border-bottom: 2px solid #89b4fa;">{line[2:]}</h1>')
-            continue
-        elif line.startswith("## "):
-            html_lines.append(f'<h2 style="color: #f9e2af; border-bottom: 1px solid #45475a;">{line[3:]}</h2>')
-            continue
-        elif line.startswith("### "):
-            html_lines.append(f'<h3 style="color: #cba6f7;">{line[4:]}</h3>')
-            continue
-
-        # Parse Blockquotes
-        if line.startswith("> "):
-            quote_text = line[2:]
-            html_lines.append(
-                f'<blockquote style="border-left: 4px solid #f5e0dc; margin-left: 0; padding-left: 10px; color: #bac2de; font-style: italic;">{quote_text}</blockquote>'
-            )
-            continue
-
-        # Process inline markdown (bold & links)
-        # Bold: **bold**
-        formatted_line = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", line)
-        # Links: [label](target)
-        formatted_line = re.sub(r"\[(.*?)\]\((.*?)\)", r'<a href="\2" style="color: #89b4fa; font-weight: bold;">\1</a>', formatted_line)
-
-        # Unordered / Ordered list items
-        if formatted_line.strip().startswith("- "):
-            html_lines.append(f'<li style="color: #cdd6f4;">{formatted_line.strip()[2:]}</li>')
-            continue
-        elif re.match(r"^\d+\.\s", formatted_line.strip()):
-            item_text = re.sub(r"^\d+\.\s", "", formatted_line.strip())
-            html_lines.append(f'<li style="color: #cdd6f4;">{item_text}</li>')
-            continue
-
-        if formatted_line.strip():
-            html_lines.append(f'<p style="color: #cdd6f4; font-size: 14px; line-height: 1.5;">{formatted_line}</p>')
-        else:
-            html_lines.append("<br>")
-
-    body_html = "\n".join(html_lines)
-    full_html = f"""
-    <html>
-    <head>
-        <style>
-            body {{
-                background-color: #181825;
-                color: #cdd6f4;
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                padding: 15px;
-            }}
-            a {{
-                color: #89b4fa;
-                text-decoration: none;
-            }}
-            a:hover {{
-                text-decoration: underline;
-            }}
-        </style>
-    </head>
-    <body>
-        {body_html}
-    </body>
-    </html>
-    """
-    return full_html
-
-
 class SpectreNetworkWorker(QThread):
-    """Worker thread running asyncio loop for circuit building & page requests."""
-    page_loaded = pyqtSignal(str, str)  # (url, content)
+    """Worker thread running asyncio loop for circuit building & HTML page requests."""
+    page_loaded = pyqtSignal(str, str)  # (url, html_content)
     status_updated = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
 
@@ -139,17 +37,16 @@ class SpectreNetworkWorker(QThread):
 
     async def _execute_request(self):
         try:
-            self.status_updated.emit("Establishing 3-Hop Onion Circuit (Guard -> Relay -> Exit)...")
+            self.status_updated.emit("Establishing 3-Hop Padded Circuit (Guard -> Relay -> Exit)...")
             circuit = SpectreClientCircuit(self.guard_addr, self.relay_addr, self.exit_addr)
             await circuit.build_circuit()
 
-            self.status_updated.emit(f"Circuit active. Requesting {self.target_url} via Exit node...")
+            self.status_updated.emit(f"Circuit active. Fetching {self.target_url} via Exit node...")
             srv_host, srv_port = self.server_addr
             response = await circuit.send_request(srv_host, srv_port, f"GET {self.target_url}")
 
             await circuit.close()
 
-            # Separate HTTP-like headers and body
             if "\r\n\r\n" in response:
                 _, body = response.split("\r\n\r\n", 1)
             else:
@@ -163,7 +60,7 @@ class SpectreNetworkWorker(QThread):
 
 
 class SpectreBrowserWindow(QMainWindow):
-    """PyQt6 Desktop GUI Client for Spectre Onion Protocol."""
+    """PyQt6 Desktop HTML Browser for .spec and .spectre websites."""
 
     def __init__(
         self,
@@ -184,8 +81,8 @@ class SpectreBrowserWindow(QMainWindow):
         self.init_ui()
 
     def init_ui(self):
-        self.setWindowTitle("Spectre Protocol Onion Browser")
-        self.resize(900, 650)
+        self.setWindowTitle("Spectre Protocol Onion HTML Browser")
+        self.resize(950, 700)
         self.setStyleSheet("background-color: #11111b; color: #cdd6f4;")
 
         main_widget = QWidget()
@@ -209,8 +106,8 @@ class SpectreBrowserWindow(QMainWindow):
         nav_layout.addWidget(self.forward_btn)
 
         self.address_bar = QLineEdit()
-        self.address_bar.setPlaceholderText("Enter .spectre address (e.g. genesis.spectre)")
-        self.address_bar.setText("genesis.spectre")
+        self.address_bar.setPlaceholderText("Enter .spec or .spectre address (e.g. genesis.spec)")
+        self.address_bar.setText("genesis.spec")
         self.address_bar.setStyleSheet("padding: 6px; background-color: #1e1e2e; color: #89b4fa; border: 1px solid #45475a; border-radius: 4px; font-weight: bold;")
         self.address_bar.returnPressed.connect(self.load_current_url)
         nav_layout.addWidget(self.address_bar)
@@ -232,7 +129,7 @@ class SpectreBrowserWindow(QMainWindow):
         # Status Bar
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
-        self.status_label = QLabel("Spectre Network Ready (3-Hop Circuit Ready)")
+        self.status_label = QLabel("Spectre Network Ready (512-Byte Cell Circuit Configured)")
         self.status_bar.addWidget(self.status_label)
 
     def load_current_url(self):
@@ -246,7 +143,6 @@ class SpectreBrowserWindow(QMainWindow):
         self.address_bar.setEnabled(False)
 
         if add_to_history:
-            # Truncate forward history if navigating to a new URL
             if self.history_index < len(self.history) - 1:
                 self.history = self.history[: self.history_index + 1]
             self.history.append(url)
@@ -259,13 +155,12 @@ class SpectreBrowserWindow(QMainWindow):
         self.worker.error_occurred.connect(self.on_error_occurred)
         self.worker.start()
 
-    def on_page_loaded(self, url: str, raw_markup: str):
+    def on_page_loaded(self, url: str, html_content: str):
         self.go_btn.setEnabled(True)
         self.address_bar.setEnabled(True)
         self.address_bar.setText(url)
 
-        html = render_spectre_markup_to_html(raw_markup)
-        self.content_viewer.setHtml(html)
+        self.content_viewer.setHtml(html_content)
 
     def on_status_updated(self, msg: str):
         self.status_label.setText(f"[SPECTRE] {msg}")
