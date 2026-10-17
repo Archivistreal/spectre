@@ -2,8 +2,7 @@ import sys
 import argparse
 import asyncio
 import logging
-import signal
-import time
+import threading
 from typing import List
 
 from core.node import SpectreNode
@@ -50,14 +49,15 @@ async def run_server(host: str = "127.0.0.1", port: int = 19080):
 
 
 def start_demo_mode():
-    import multiprocessing
     from PyQt6.QtWidgets import QApplication
     from browser.ui import SpectreBrowserWindow
 
     logging.info("Starting Spectre Protocol Demo Network...")
 
+    # Run asyncio loop in background thread to serve daemon nodes continuously while Qt GUI handles main thread
+    loop = asyncio.new_event_loop()
+
     async def _start_demo_async():
-        # Spin up 3 daemon nodes
         guard = SpectreNode("GuardNode", "127.0.0.1", 19001, role="guard")
         relay = SpectreNode("RelayNode", "127.0.0.1", 19002, role="relay")
         exit_node = SpectreNode("ExitNode", "127.0.0.1", 19003, role="exit")
@@ -71,12 +71,17 @@ def start_demo_mode():
         logging.info("Spectre 3-Hop Onion Network & Content Server active!")
         return guard, relay, exit_node, server
 
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    def _async_loop_worker(l):
+        asyncio.set_event_loop(l)
+        l.run_forever()
+
     guard, relay, exit_node, server = loop.run_until_complete(_start_demo_async())
 
+    # Start background loop thread so asyncio TCP servers continuously accept & process socket connections
+    thread = threading.Thread(target=_async_loop_worker, args=(loop,), daemon=True)
+    thread.start()
+
     try:
-        # Launch PyQt6 Browser GUI
         app = QApplication(sys.argv)
         browser = SpectreBrowserWindow(
             guard_addr=("127.0.0.1", 19001),
@@ -86,17 +91,20 @@ def start_demo_mode():
         )
         browser.show()
 
-        # Load initial page automatically
+        # Automatically trigger initial request to spectre.spec
         browser.load_current_url()
 
-        # Run Qt event loop along with asyncio event processing
         sys.exit(app.exec())
 
     finally:
-        loop.run_until_complete(guard.stop())
-        loop.run_until_complete(relay.stop())
-        loop.run_until_complete(exit_node.stop())
-        loop.run_until_complete(server.stop())
+        async def _stop():
+            await guard.stop()
+            await relay.stop()
+            await exit_node.stop()
+            await server.stop()
+
+        asyncio.run_coroutine_threadsafe(_stop(), loop).result()
+        loop.call_soon_threadsafe(loop.stop)
 
 
 def main():

@@ -1,5 +1,6 @@
 import os
 import struct
+import math
 from typing import List, Tuple
 from cryptography.hazmat.primitives.asymmetric import ed25519, x25519
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
@@ -7,37 +8,43 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives import hashes
 from cryptography.exceptions import InvalidSignature, InvalidTag
 
-CELL_SIZE = 512  # Fixed 512-byte cell size to prevent packet size side-channel analysis
+CELL_BLOCK_SIZE = 512  # Quantum unit for fixed cell padding against side-channel analysis
 
 
 # --- Cell Padding & Anti-Traffic Analysis Helpers ---
 
 def pad_cell(payload: bytes) -> bytes:
     """
-    Pads payload to fixed 512-byte CELL_SIZE.
-    Format: 2-byte big-endian payload length + payload + random padding.
+    Pads payload to a multiple of CELL_BLOCK_SIZE (512, 1024, 1536, ...).
+    Format: 4-byte big-endian payload length + payload + random padding.
+    Obscures exact length while allowing arbitrarily large HTML documents.
     """
     payload_len = len(payload)
-    max_payload = CELL_SIZE - 2
-    if payload_len > max_payload:
-        raise ValueError(f"Payload length {payload_len} exceeds max padded cell capacity {max_payload}")
+    total_needed = payload_len + 4
+    num_blocks = math.ceil(total_needed / CELL_BLOCK_SIZE)
+    if num_blocks == 0:
+        num_blocks = 1
+    target_size = num_blocks * CELL_BLOCK_SIZE
 
-    header = struct.pack(">H", payload_len)
-    padding_needed = max_payload - payload_len
+    header = struct.pack(">I", payload_len)
+    padding_needed = target_size - total_needed
     padding = os.urandom(padding_needed)
     return header + payload + padding
 
 
 def unpad_cell(cell_data: bytes) -> bytes:
     """
-    Unpads a fixed 512-byte cell payload.
-    Extracts 2-byte length and returns original payload bytes.
+    Unpads cell data that was padded to a multiple of CELL_BLOCK_SIZE.
+    Extracts 4-byte length and returns original payload bytes.
     """
-    if len(cell_data) != CELL_SIZE:
-        raise ValueError(f"Invalid cell size {len(cell_data)}, expected {CELL_SIZE}")
+    if len(cell_data) < 4 or len(cell_data) % CELL_BLOCK_SIZE != 0:
+        raise ValueError(f"Invalid cell data length {len(cell_data)}")
 
-    payload_len = struct.unpack(">H", cell_data[:2])[0]
-    return cell_data[2: 2 + payload_len]
+    payload_len = struct.unpack(">I", cell_data[:4])[0]
+    if payload_len + 4 > len(cell_data):
+        raise ValueError(f"Corrupted cell header: payload_len {payload_len} exceeds total cell size {len(cell_data)}")
+
+    return cell_data[4: 4 + payload_len]
 
 
 # --- Zeroize Key Memory Helper ---

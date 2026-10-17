@@ -18,17 +18,23 @@ from core.crypto import (
     pad_cell,
     unpad_cell,
     zeroize_bytes,
-    CELL_SIZE,
+    CELL_BLOCK_SIZE,
 )
 from cryptography.exceptions import InvalidTag
 
 
-def test_fixed_cell_padding():
-    payload = b"GET genesis.spectre SPECTRE/1.0"
-    cell = pad_cell(payload)
-    assert len(cell) == CELL_SIZE
+def test_fixed_cell_padding_small_and_large():
+    small_payload = b"GET genesis.spec SPECTRE/1.0"
+    cell = pad_cell(small_payload)
+    assert len(cell) == CELL_BLOCK_SIZE  # 512 bytes
     unpadded = unpad_cell(cell)
-    assert unpadded == payload
+    assert unpadded == small_payload
+
+    large_payload = b"A" * 2500  # Requires math.ceil((2500+4)/512) = 5 blocks * 512 = 2560 bytes
+    large_cell = pad_cell(large_payload)
+    assert len(large_cell) == 2560
+    assert len(large_cell) % CELL_BLOCK_SIZE == 0
+    assert unpad_cell(large_cell) == large_payload
 
 
 def test_zeroize_bytes_memory():
@@ -86,7 +92,7 @@ def test_3hop_onion_wrap_and_peel():
     exit_key = derive_symmetric_key(b"exit_secret")
 
     keys = [guard_key, relay_key, exit_key]
-    payload = pad_cell(b"GET genesis.spectre SPECTRE/1.0")
+    payload = pad_cell(b"GET genesis.spec SPECTRE/1.0")
 
     # Client wraps onion (Exit -> Relay -> Guard)
     wrapped = wrap_onion(payload, keys)
@@ -100,7 +106,7 @@ def test_3hop_onion_wrap_and_peel():
     # Hop 3: Exit peels inner layer
     peeled_exit = peel_onion_layer(peeled_relay, exit_key)
 
-    assert unpad_cell(peeled_exit) == b"GET genesis.spectre SPECTRE/1.0"
+    assert unpad_cell(peeled_exit) == b"GET genesis.spec SPECTRE/1.0"
 
 
 def test_onion_response_unwrap():

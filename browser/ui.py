@@ -37,24 +37,27 @@ class SpectreNetworkWorker(QThread):
 
     async def _execute_request(self):
         try:
-            self.status_updated.emit("Establishing 3-Hop Padded Circuit (Guard -> Relay -> Exit)...")
             circuit = SpectreClientCircuit(self.guard_addr, self.relay_addr, self.exit_addr)
-            await circuit.build_circuit()
+            try:
+                self.status_updated.emit("Establishing 3-Hop Padded Circuit (Guard -> Relay -> Exit)...")
+                await circuit.build_circuit()
 
-            self.status_updated.emit(f"Circuit active. Fetching {self.target_url} via Exit node...")
-            srv_host, srv_port = self.server_addr
-            response = await circuit.send_request(srv_host, srv_port, f"GET {self.target_url}")
+                self.status_updated.emit(f"Circuit active. Fetching {self.target_url} via Exit node...")
+                srv_host, srv_port = self.server_addr
+                response = await circuit.send_request(srv_host, srv_port, f"GET {self.target_url}")
 
-            await circuit.close()
+                if "\r\n\r\n" in response:
+                    _, body = response.split("\r\n\r\n", 1)
+                else:
+                    body = response
 
-            if "\r\n\r\n" in response:
-                _, body = response.split("\r\n\r\n", 1)
-            else:
-                body = response
+                self.status_updated.emit(f"Successfully retrieved {self.target_url} over Spectre Onion Network.")
+                self.page_loaded.emit(self.target_url, body)
+            finally:
+                await circuit.close()
 
-            self.status_updated.emit(f"Successfully retrieved {self.target_url} over Spectre Onion Network.")
-            self.page_loaded.emit(self.target_url, body)
-
+        except ConnectionRefusedError:
+            self.error_occurred.emit("Could not connect to Spectre Guard Node at 127.0.0.1:19001.\n\nPlease start the daemon network first by running:\npython main.py --demo")
         except Exception as e:
             self.error_occurred.emit(f"Network error: {str(e)}")
 
