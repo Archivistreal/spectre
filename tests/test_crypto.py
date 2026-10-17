@@ -18,7 +18,8 @@ from core.crypto import (
     pad_cell,
     unpad_cell,
     zeroize_bytes,
-    CELL_BLOCK_SIZE,
+    MIN_CELL_SIZE,
+    MAX_CELL_SIZE,
 )
 from cryptography.exceptions import InvalidTag
 
@@ -26,14 +27,13 @@ from cryptography.exceptions import InvalidTag
 def test_fixed_cell_padding_small_and_large():
     small_payload = b"GET genesis.spec SPECTRE/1.0"
     cell = pad_cell(small_payload)
-    assert len(cell) == CELL_BLOCK_SIZE  # 512 bytes
+    assert MIN_CELL_SIZE <= len(cell) <= MAX_CELL_SIZE
     unpadded = unpad_cell(cell)
     assert unpadded == small_payload
 
-    large_payload = b"A" * 2500  # Requires math.ceil((2500+4)/512) = 5 blocks * 512 = 2560 bytes
+    large_payload = b"A" * 2500
     large_cell = pad_cell(large_payload)
-    assert len(large_cell) == 2560
-    assert len(large_cell) % CELL_BLOCK_SIZE == 0
+    assert len(large_cell) >= len(large_payload) + 4
     assert unpad_cell(large_cell) == large_payload
 
 

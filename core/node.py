@@ -20,7 +20,8 @@ from core.crypto import (
     unwrap_onion_response,
     pad_cell,
     unpad_cell,
-    CELL_BLOCK_SIZE,
+    MIN_CELL_SIZE,
+    MAX_CELL_SIZE,
 )
 
 logger = logging.getLogger("spectre.node")

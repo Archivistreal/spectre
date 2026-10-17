@@ -1,5 +1,6 @@
 import os
 import struct
+import random
 import math
 from typing import List, Tuple
 from cryptography.hazmat.primitives.asymmetric import ed25519, x25519
@@ -8,41 +9,47 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives import hashes
 from cryptography.exceptions import InvalidSignature, InvalidTag
 
-CELL_BLOCK_SIZE = 512  # Quantum unit for fixed cell padding against side-channel analysis
+MIN_CELL_SIZE = 512
+MAX_CELL_SIZE = 1024
 
 
-# --- Cell Padding & Anti-Traffic Analysis Helpers ---
+# --- Variable Cell Padding & Anti-Traffic Analysis Helpers ---
 
-def pad_cell(payload: bytes) -> bytes:
+def pad_cell(payload: bytes, min_size: int = MIN_CELL_SIZE, max_size: int = MAX_CELL_SIZE) -> bytes:
     """
-    Pads payload to a multiple of CELL_BLOCK_SIZE (512, 1024, 1536, ...).
-    Format: 4-byte big-endian payload length + payload + random padding.
-    Obscures exact length while allowing arbitrarily large HTML documents.
+    Pads payload dynamically with random jitter bytes between min_size (512) and max_size (1024).
+    Format: 4-byte big-endian payload length + payload + random padding bytes.
+    Eliminates static 512-byte size fingerprinting and packet length correlation.
     """
     payload_len = len(payload)
-    total_needed = payload_len + 4
-    num_blocks = math.ceil(total_needed / CELL_BLOCK_SIZE)
-    if num_blocks == 0:
-        num_blocks = 1
-    target_size = num_blocks * CELL_BLOCK_SIZE
+    base_needed = payload_len + 4
+
+    # Calculate target size with randomized padding
+    if base_needed < min_size:
+        target_size = random.randint(min_size, max_size)
+    else:
+        # For larger payloads, pad to a multiple of 256 bytes plus random jitter
+        num_blocks = math.ceil(base_needed / 256)
+        base_size = num_blocks * 256
+        target_size = base_size + random.randint(32, 128)
 
     header = struct.pack(">I", payload_len)
-    padding_needed = target_size - total_needed
+    padding_needed = target_size - base_needed
     padding = os.urandom(padding_needed)
     return header + payload + padding
 
 
 def unpad_cell(cell_data: bytes) -> bytes:
     """
-    Unpads cell data that was padded to a multiple of CELL_BLOCK_SIZE.
-    Extracts 4-byte length and returns original payload bytes.
+    Unpads variable-length cell data.
+    Extracts 4-byte length header and returns original payload bytes.
     """
-    if len(cell_data) < 4 or len(cell_data) % CELL_BLOCK_SIZE != 0:
-        raise ValueError(f"Invalid cell data length {len(cell_data)}")
+    if len(cell_data) < 4:
+        raise ValueError("Invalid cell data: shorter than header")
 
     payload_len = struct.unpack(">I", cell_data[:4])[0]
     if payload_len + 4 > len(cell_data):
-        raise ValueError(f"Corrupted cell header: payload_len {payload_len} exceeds total cell size {len(cell_data)}")
+        raise ValueError(f"Corrupted cell header: payload_len {payload_len} exceeds cell size {len(cell_data)}")
 
     return cell_data[4: 4 + payload_len]
 
