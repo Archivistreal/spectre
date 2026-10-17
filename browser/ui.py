@@ -60,8 +60,9 @@ class SpectreNetworkWorker(QThread):
             finally:
                 await circuit.close()
 
-        except ConnectionRefusedError:
-            self.error_occurred.emit("Could not connect to Spectre Guard Node at 127.0.0.1:19001.\n\nPlease start the daemon network first by running:\npython main.py --demo")
+        except (ConnectionRefusedError, ConnectionError, OSError, TimeoutError) as e:
+            g_host, g_port = self.guard_addr
+            self.error_occurred.emit(f"Could not connect to Spectre Guard Node at {g_host}:{g_port}.\n\nDetail: {e}\n\nPlease ensure the Guard Node server is running on {g_host}:{g_port} or launch local demo mode:\npython main.py --demo")
         except Exception as e:
             self.error_occurred.emit(f"Network error: {str(e)}")
 

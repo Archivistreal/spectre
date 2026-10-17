@@ -291,7 +291,12 @@ class SpectreClientCircuit:
 
         # Step 1: Connect to Guard and CREATE hop 1
         g_host, g_port = self.guard_address
-        self.guard_reader, self.guard_writer = await asyncio.open_connection(g_host, g_port)
+        try:
+            self.guard_reader, self.guard_writer = await asyncio.wait_for(
+                asyncio.open_connection(g_host, g_port), timeout=10.0
+            )
+        except (OSError, asyncio.TimeoutError) as err:
+            raise ConnectionError(f"Could not connect to Spectre Guard node at {g_host}:{g_port} ({err})") from err
 
         cli_eph_priv1, cli_eph_pub1 = generate_ephemeral_keypair()
         cli_eph_pub1_bytes = serialize_x25519_public_key(cli_eph_pub1)
