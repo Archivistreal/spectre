@@ -1,88 +1,62 @@
 # Spectre Protocol
 
-An encrypted, 3-hop onion routing network with a PyQt6 GUI desktop browser, local TCP socket daemon nodes, 512-byte fixed cell padding against traffic analysis, and native HTML `.spec` website hosting featuring `spectre.spec`.
+An encrypted, 3-hop onion routing network with a PyQt6 GUI desktop browser, daemon server nodes, variable 512-1024 byte cell padding against traffic analysis, and native HTML `.spec` website hosting featuring `spectre.spec`.
 
 ---
 
 ## Overview Architecture
 
 ```text
-+-------------------+        +----------------+        +----------------+        +---------------+        +----------------------+
-|  PyQt6 HTML Client|        |   Guard Node   |        |   Relay Node   |        |   Exit Node   |        | .spec Content Server |
-| (spectre.spec)    | ===>   |  (Port 19001)  | ===>   |  (Port 19002)  | ===>   | (Port 19003)  | ===>   | (spectre.spec:19080) |
-+-------------------+        +----------------+        +----------------+        +---------------+        +----------------------+
-     Client Circuit           Hop 1 (Outer Layer)      Hop 2 (Middle)            Hop 3 (Inner Layer)      Target Content Server
-```
-
-### High-Security Features & `.spec` Web Ecosystem
-
-1. **Flagship Website (`spectre.spec`)**: The primary web portal on the Spectre Onion Web hosting protocol specifications, features, and links to `genesis.spec` and `manifesto.spec`.
-2. **Fixed 512-Byte Cell Padding**: All cells are padded to 512 bytes with random padding before onion encryption, preventing side-channel traffic analysis and size correlation.
-3. **Anti-Replay Protection**: Sequence counters are embedded into onion commands and tracked per circuit to reject replay attacks.
-4. **In-Place Key Zeroization**: Sensitive session keys and Diffie-Hellman secrets are explicitly zeroized in memory when circuit sessions terminate.
-5. **Cryptographic Primitives**: Ed25519 node identity signatures, ephemeral X25519 Diffie-Hellman key exchanges, HKDF-SHA256 key derivation, and ChaCha20-Poly1305 AEAD multi-layer encryption.
-6. **Native HTML Website Rendering**: Rich HTML `.spec` websites rendered directly in the PyQt6 browser.
-
----
-
-## Directory Structure
-
-```text
-spectre-net/
-├── core/
-│   ├── __init__.py
-│   ├── crypto.py      # X25519, Ed25519, HKDF, ChaCha20-Poly1305, zeroization, & 512-byte cell padding
-│   └── node.py        # Guard, Relay, and Exit daemon nodes with sequence replay protection
-├── browser/
-│   ├── __init__.py
-│   └── ui.py          # PyQt6 HTML desktop browser client defaulting to spectre.spec
-├── server/
-│   ├── __init__.py
-│   └── host.py        # HTML .spec content server hosting spectre.spec, genesis.spec, and manifesto.spec
-├── tests/
-│   ├── __init__.py
-│   ├── test_crypto.py # Unit tests for crypto, padding, and zeroize functions
-│   ├── test_circuit.py# Integration tests for 3-hop circuit building
-│   ├── test_server.py # Tests for spectre.spec and .spec HTML content server
-│   └── test_browser.py# Unit tests for browser navigation history
-├── main.py            # Entry point CLI (demo mode, browser, daemon nodes, or content server)
-├── requirements.txt   # Dependencies: PyQt6, cryptography, pytest, pytest-asyncio
-└── README.md          # Protocol specifications and setup guide
++-------------------+        +----------------------+        +----------------------+        +---------------------+        +-----------------------+
+|  PyQt6 HTML Client|        |   Guard Server Node  |        |   Relay Server Node  |        |   Exit Server Node  |        | .spec Content Server  |
+|  (spectre.spec)   | ===>   |  (e.g. 10.0.0.1:19001)| ===>   | (e.g. 10.0.0.2:19002)| ===>   |(e.g. 10.0.0.3:19003)| ===>   | (10.0.0.4:19080)      |
++-------------------+        +----------------------+        +----------------------+        +---------------------+        +-----------------------+
+     Client Circuit           Hop 1 (Outer Layer)              Hop 2 (Middle Layer)           Hop 3 (Inner Layer)             Target Content Server
 ```
 
 ---
 
-## Quick Start & Installation
+## Multi-Server Deployment Guide (Real Servers)
 
+You can deploy Spectre Protocol across 4 independent physical or cloud servers (Guard, Relay, Exit, Content Server) over real TCP network sockets:
+
+### 1. Server 1 (Guard Node):
 ```bash
-pip install -r requirements.txt
+python main.py --node --role guard --host 0.0.0.0 --port 19001
+```
+
+### 2. Server 2 (Relay Node):
+```bash
+python main.py --node --role relay --host 0.0.0.0 --port 19002
+```
+
+### 3. Server 3 (Exit Node):
+```bash
+python main.py --node --role exit --host 0.0.0.0 --port 19003
+```
+
+### 4. Server 4 (Content Server hosting spectre.spec):
+```bash
+python main.py --server --host 0.0.0.0 --port 19080
+```
+
+### 5. Client Machine (PyQt6 Browser):
+Connect to the 3 remote node servers over real TCP sockets:
+```bash
+python main.py --browser \
+  --guard 10.0.0.1:19001 \
+  --relay 10.0.0.2:19002 \
+  --exit-node 10.0.0.3:19003 \
+  --content-server 10.0.0.4:19080
 ```
 
 ---
 
-## Usage Guide
+## Local All-In-One Demo Mode
 
-### 1. Demo Mode (All-In-One)
-Spins up 3 local daemon nodes (Guard, Relay, Exit), the HTML `.spec` content server, and opens the PyQt6 GUI browser displaying `spectre.spec`:
+To test everything locally on 1 machine:
 ```bash
 python main.py --demo
-```
-
-### 2. Standalone Execution
-
-**Start 3 Daemon Nodes (Guard, Relay, Exit):**
-```bash
-python main.py --nodes
-```
-
-**Start HTML Content Server:**
-```bash
-python main.py --server
-```
-
-**Launch PyQt6 HTML Browser:**
-```bash
-python main.py --browser
 ```
 
 ---
