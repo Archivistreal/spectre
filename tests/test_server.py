@@ -18,7 +18,7 @@ async def test_content_server_pages():
         writer0.close()
 
         assert "200 OK" in resp0
-        assert "Official Spectre Network Portal" in resp0
+        assert "QUANTUM-SECURE ONION WEB" in resp0
 
         # Request genesis.spec
         reader, writer = await asyncio.open_connection("127.0.0.1", 19088)

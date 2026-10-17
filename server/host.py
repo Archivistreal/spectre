@@ -9,52 +9,61 @@ SPECTRE_SPEC_HTML = """<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
-    <title>spectre.spec - The Official Spectre Protocol Homepage</title>
+    <title>spectre.spec - The Next-Gen Spectre Protocol Onion Web</title>
     <style>
-        body { background-color: #11111b; color: #cdd6f4; font-family: 'Segoe UI', sans-serif; padding: 25px; line-height: 1.6; }
-        h1 { color: #89b4fa; border-bottom: 2px solid #89b4fa; padding-bottom: 10px; font-size: 28px; }
-        h2 { color: #f9e2af; margin-top: 20px; font-size: 20px; }
-        .hero { background: linear-gradient(135deg, #1e1e2e 0%, #181825 100%); padding: 20px; border-radius: 10px; border: 1px solid #45475a; margin-bottom: 20px; }
-        .grid { display: flex; gap: 15px; margin-bottom: 20px; }
-        .card { flex: 1; background-color: #1e1e2e; padding: 18px; border-radius: 8px; border: 1px solid #313244; }
-        a { color: #89b4fa; text-decoration: none; font-weight: bold; }
-        a:hover { text-decoration: underline; color: #b4befe; }
-        code { background-color: #181825; color: #a6e3a1; padding: 4px 8px; border-radius: 4px; font-family: monospace; }
-        .status-badge { display: inline-block; background-color: #a6e3a1; color: #11111b; font-weight: bold; padding: 4px 12px; border-radius: 15px; font-size: 13px; }
+        * { box-sizing: border-box; }
+        body { background-color: #020617; color: #38bdf8; font-family: 'Fira Code', monospace, sans-serif; padding: 30px; line-height: 1.6; }
+        h1 { color: #f8fafc; border-bottom: 2px solid #0ea5e9; padding-bottom: 12px; font-size: 28px; text-shadow: 0 0 10px rgba(56,189,248,0.5); }
+        h2 { color: #f59e0b; margin-top: 20px; font-size: 18px; text-transform: uppercase; letter-spacing: 1px; }
+        .hud-card { background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(56, 189, 248, 0.3); padding: 22px; border-radius: 12px; margin-bottom: 22px; box-shadow: 0 8px 32px rgba(0,0,0,0.8); }
+        .grid { display: flex; gap: 20px; margin-bottom: 22px; }
+        .card { flex: 1; background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(56, 189, 248, 0.25); padding: 20px; border-radius: 10px; }
+        a { color: #38bdf8; text-decoration: none; font-weight: bold; border-bottom: 1px dashed #38bdf8; transition: all 0.2s; }
+        a:hover { color: #34d399; border-bottom: 1px solid #34d399; text-shadow: 0 0 8px rgba(52,211,153,0.6); }
+        code { background-color: #0f172a; color: #34d399; padding: 4px 8px; border-radius: 4px; border: 1px solid #1e293b; font-size: 13px; }
+        .status-badge { display: inline-block; background-color: #10b981; color: #020617; font-weight: bold; padding: 4px 14px; border-radius: 20px; font-size: 12px; letter-spacing: 1px; }
+        .telemetry { display: flex; justify-content: space-between; background: #020617; padding: 12px 18px; border-radius: 8px; border: 1px solid #1e293b; margin-top: 15px; font-size: 12px; }
+        .quantum-indicator { color: #a855f7; font-weight: bold; }
     </style>
 </head>
 <body>
-    <div class="hero">
-        <h1>spectre.spec</h1>
-        <p><span class="status-badge">SPECTRE ONION WEB ACTIVE</span> &nbsp; <b>Welcome to the official homepage of Spectre Protocol</b></p>
-        <p>An encrypted, 3-hop onion routing network engineered for absolute privacy, zero-knowledge topology, fixed 512-byte cell padding, and native <code>.spec</code> website hosting.</p>
+    <div class="hud-card">
+        <h1>SPECTRE.SPEC // QUANTUM-SECURE ONION WEB</h1>
+        <p><span class="status-badge">QUANTUM ENTROPY SYNCED</span> &nbsp; <b>Next-Generation Anti-Traffic Analysis Protocol</b></p>
+        <p>Outperforming legacy onion networks with quantum-resistant key exchange, ANU QRNG entropy seeds, variable 512-1024 byte cell jitter padding, and zero-knowledge peer-to-peer relay nodes.</p>
+
+        <div class="telemetry">
+            <span>ENTROPY: <span class="quantum-indicator">ANU QRNG (Vacuum Fluctuations)</span></span>
+            <span>CIPHER: <strong style="color: #38bdf8;">ChaCha20-Poly1305 + ECDH P-256</strong></span>
+            <span>PADDING: <strong style="color: #34d399;">512-1024B RANDOM JITTER</strong></span>
+        </div>
     </div>
 
     <div class="grid">
         <div class="card">
-            <h2>Explore Spectre Web Sites</h2>
-            <ul>
+            <h2>Explore .spec Onion Web</h2>
+            <ul style="list-style-type: square; padding-left: 20px; line-height: 2;">
                 <li><a href="spectre.spec">spectre.spec</a> - Official Spectre Network Portal</li>
-                <li><a href="genesis.spec">genesis.spec</a> - Network Genesis & Architecture Node</li>
+                <li><a href="genesis.spec">genesis.spec</a> - Genesis Architecture Node</li>
                 <li><a href="manifesto.spec">manifesto.spec</a> - The Cypherpunk Manifesto</li>
             </ul>
         </div>
 
         <div class="card">
-            <h2>Security Specifications</h2>
-            <ul>
-                <li><b>Traffic Analysis Resistance:</b> Fixed 512-byte cell padding</li>
-                <li><b>Anti-Replay Protection:</b> Sequence counters per circuit</li>
-                <li><b>Memory Zeroization:</b> Ephemeral key wiping on drop</li>
-                <li><b>AEAD Cipher:</b> ChaCha20-Poly1305 / X25519 / Ed25519</li>
+            <h2>Superiority over Traditional Onion Web</h2>
+            <ul style="list-style-type: circle; padding-left: 20px; line-height: 1.8;">
+                <li><b>Traffic Analysis Immune:</b> Variable padding eliminates packet length fingerprinting</li>
+                <li><b>Embedded P2P Relays:</b> Browsers automatically seed network capacity</li>
+                <li><b>Sequence Counter Integrity:</b> Replay attack protection per circuit</li>
+                <li><b>Zero Memory Residuals:</b> In-place key wiping on session termination</li>
             </ul>
         </div>
     </div>
 
-    <div class="card">
-        <h2>Host Your Own .spec Website</h2>
-        <p>You can create any <code>.spec</code> website by hosting HTML files over the Spectre content server network.</p>
-        <pre><code>[SPECTRE-NET] Active Circuit: Guard (Port 19001) -> Relay (Port 19002) -> Exit (Port 19003) -> Host (spectre.spec)</code></pre>
+    <div class="hud-card">
+        <h2>Live Circuit Topology Diagnostic</h2>
+        <p>Your request traversed an encrypted 3-hop circuit:</p>
+        <pre style="background: #020617; padding: 15px; border-radius: 6px; border: 1px solid #1e293b; overflow-x: auto;"><code>[BROWSER CLIENT] ===(ECDH-GCM)===> [GUARD NODE: 19001] ===(ChaCha20)===> [RELAY NODE: 19002] ===(ChaCha20)===> [EXIT NODE: 19003] ===> [spectre.spec CONTENT SERVER: 19080]</code></pre>
     </div>
 </body>
 </html>

@@ -18,9 +18,16 @@ from core.crypto import (
     pad_cell,
     unpad_cell,
     zeroize_bytes,
+    get_quantum_entropy,
     MIN_CELL_SIZE,
     MAX_CELL_SIZE,
 )
+
+
+def test_quantum_entropy_generation():
+    entropy = get_quantum_entropy(32)
+    assert isinstance(entropy, bytes)
+    assert len(entropy) == 32
 from cryptography.exceptions import InvalidTag
 
 
