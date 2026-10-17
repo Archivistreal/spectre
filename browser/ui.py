@@ -1,5 +1,7 @@
 import sys
 import asyncio
+import threading
+import logging
 from typing import Optional, List, Tuple
 from PyQt6.QtWidgets import (
     QApplication,
@@ -15,7 +17,9 @@ from PyQt6.QtWidgets import (
     QMessageBox,
 )
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
-from core.node import SpectreClientCircuit
+from core.node import SpectreNode, SpectreClientCircuit
+
+logger = logging.getLogger("spectre.browser")
 
 
 class SpectreNetworkWorker(QThread):
@@ -63,7 +67,7 @@ class SpectreNetworkWorker(QThread):
 
 
 class SpectreBrowserWindow(QMainWindow):
-    """PyQt6 Desktop HTML Browser for .spec and .spectre websites."""
+    """PyQt6 Desktop HTML Browser with embedded P2P Relay Node participation."""
 
     def __init__(
         self,
@@ -71,20 +75,67 @@ class SpectreBrowserWindow(QMainWindow):
         relay_addr: Tuple[str, int] = ("127.0.0.1", 19002),
         exit_addr: Tuple[str, int] = ("127.0.0.1", 19003),
         server_addr: Tuple[str, int] = ("127.0.0.1", 19080),
+        node_port: int = 0,  # 0 picks available random port for embedded relay node
+        enable_embedded_node: bool = True,
     ):
         super().__init__()
         self.guard_addr = guard_addr
         self.relay_addr = relay_addr
         self.exit_addr = exit_addr
         self.server_addr = server_addr
+        self.node_port = node_port
+        self.enable_embedded_node = enable_embedded_node
 
         self.history: List[str] = []
         self.history_index: int = -1
 
+        self.embedded_node: Optional[SpectreNode] = None
+        self.node_loop: Optional[asyncio.AbstractEventLoop] = None
+        self.node_thread: Optional[threading.Thread] = None
+
         self.init_ui()
 
+        if self.enable_embedded_node:
+            self.start_embedded_node()
+
+    def start_embedded_node(self):
+        """Spins up background embedded Spectre Relay Node in a dedicated asyncio thread."""
+        try:
+            self.node_loop = asyncio.new_event_loop()
+
+            async def _spin_up():
+                self.embedded_node = SpectreNode("BrowserEmbeddedRelay", "127.0.0.1", self.node_port, role="relay")
+                await self.embedded_node.start()
+
+            self.node_loop.run_until_complete(_spin_up())
+
+            def _node_worker(l):
+                asyncio.set_event_loop(l)
+                l.run_forever()
+
+            self.node_thread = threading.Thread(target=_node_worker, args=(self.node_loop,), daemon=True)
+            self.node_thread.start()
+
+            bound_port = self.embedded_node.port if self.embedded_node else self.node_port
+            self.status_label.setText(f"[SPECTRE P2P] Embedded Relay Node Active on tcp://127.0.0.1:{bound_port} | Contributing to Network")
+        except Exception as e:
+            logger.warning(f"Could not start embedded browser node: {e}")
+
+    def closeEvent(self, event):
+        """Gracefully stops embedded node on window close."""
+        if self.embedded_node and self.node_loop:
+            try:
+                async def _shut():
+                    await self.embedded_node.stop()
+
+                asyncio.run_coroutine_threadsafe(_shut(), self.node_loop).result(timeout=2.0)
+                self.node_loop.call_soon_threadsafe(self.node_loop.stop)
+            except Exception as e:
+                logger.warning(f"Error stopping embedded node: {e}")
+        event.accept()
+
     def init_ui(self):
-        self.setWindowTitle("Spectre Protocol Onion HTML Browser")
+        self.setWindowTitle("Spectre Protocol Onion HTML Browser (P2P Node Active)")
         self.resize(950, 700)
         self.setStyleSheet("background-color: #11111b; color: #cdd6f4;")
 
@@ -132,7 +183,7 @@ class SpectreBrowserWindow(QMainWindow):
         # Status Bar
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
-        self.status_label = QLabel("Spectre Network Ready (512-Byte Cell Circuit Configured)")
+        self.status_label = QLabel("Spectre Network Ready (P2P Node Initializing...)")
         self.status_bar.addWidget(self.status_label)
 
     def load_current_url(self):
@@ -166,7 +217,8 @@ class SpectreBrowserWindow(QMainWindow):
         self.content_viewer.setHtml(html_content)
 
     def on_status_updated(self, msg: str):
-        self.status_label.setText(f"[SPECTRE] {msg}")
+        node_info = f" | [P2P Relay Node Active: tcp://127.0.0.1:{self.embedded_node.port}]" if self.embedded_node else ""
+        self.status_label.setText(f"[SPECTRE] {msg}{node_info}")
 
     def on_error_occurred(self, err_msg: str):
         self.go_btn.setEnabled(True)

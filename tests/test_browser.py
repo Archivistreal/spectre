@@ -7,10 +7,15 @@ from browser.ui import SpectreBrowserWindow
 app = QApplication.instance() or QApplication(sys.argv)
 
 
-def test_browser_window_navigation_history():
-    window = SpectreBrowserWindow()
+def test_browser_window_navigation_history_and_embedded_node():
+    window = SpectreBrowserWindow(enable_embedded_node=True)
     assert window.history == []
     assert window.history_index == -1
+
+    # Verify embedded node initialized
+    assert window.embedded_node is not None
+    assert window.embedded_node.role == "relay"
+    assert window.embedded_node.port > 0
 
     # Override SpectreNetworkWorker to simulate instant load without real sockets in history unit test
     def mock_fetch_page(url, add_to_history=True):
@@ -44,3 +49,6 @@ def test_browser_window_navigation_history():
     # Test forward button
     window.navigate_forward()
     assert window.history_index == 1
+
+    # Clean shutdown
+    window.close()

@@ -1,18 +1,24 @@
 # Spectre Protocol
 
-An encrypted, 3-hop onion routing network with a PyQt6 GUI desktop browser, daemon server nodes, variable 512-1024 byte cell padding against traffic analysis, and native HTML `.spec` website hosting featuring `spectre.spec`.
+An encrypted, 3-hop onion routing network with a PyQt6 GUI desktop browser, embedded P2P relay node participation, daemon server nodes, variable 512-1024 byte cell padding against traffic analysis, and native HTML `.spec` website hosting featuring `spectre.spec`.
 
 ---
 
 ## Overview Architecture
 
 ```text
-+-------------------+        +----------------------+        +----------------------+        +---------------------+        +-----------------------+
-|  PyQt6 HTML Client|        |   Guard Server Node  |        |   Relay Server Node  |        |   Exit Server Node  |        | .spec Content Server  |
-|  (spectre.spec)   | ===>   |  (e.g. 10.0.0.1:19001)| ===>   | (e.g. 10.0.0.2:19002)| ===>   |(e.g. 10.0.0.3:19003)| ===>   | (10.0.0.4:19080)      |
-+-------------------+        +----------------------+        +----------------------+        +---------------------+        +-----------------------+
-     Client Circuit           Hop 1 (Outer Layer)              Hop 2 (Middle Layer)           Hop 3 (Inner Layer)             Target Content Server
++------------------------------------+        +----------------------+        +----------------------+        +---------------------+        +-----------------------+
+|  PyQt6 HTML Client & Embedded Node |        |   Guard Server Node  |        |   Relay Server Node  |        |   Exit Server Node  |        | .spec Content Server  |
+|  (spectre.spec + Embedded Relay)   | ===>   |  (e.g. 10.0.0.1:19001)| ===>   | (e.g. 10.0.0.2:19002)| ===>   |(e.g. 10.0.0.3:19003)| ===>   | (10.0.0.4:19080)      |
++------------------------------------+        +----------------------+        +----------------------+        +---------------------+        +-----------------------+
+        Client & P2P Relay Node                Hop 1 (Outer Layer)              Hop 2 (Middle Layer)           Hop 3 (Inner Layer)             Target Content Server
 ```
+
+---
+
+## Embedded P2P Browser Node Participation
+
+Every user who launches the Spectre Browser (`python main.py --browser`) automatically spins up an embedded background Relay Node. This ensures every browser user contributes relay capacity to the network, increasing decentralization and anonymity set size across the Spectre Onion Web.
 
 ---
 
@@ -40,8 +46,8 @@ python main.py --node --role exit --host 0.0.0.0 --port 19003
 python main.py --server --host 0.0.0.0 --port 19080
 ```
 
-### 5. Client Machine (PyQt6 Browser):
-Connect to the 3 remote node servers over real TCP sockets:
+### 5. Client Machine (PyQt6 Browser & Embedded P2P Node):
+Connect to the 3 remote node servers over real TCP sockets while contributing local relay capacity:
 ```bash
 python main.py --browser \
   --guard 10.0.0.1:19001 \
