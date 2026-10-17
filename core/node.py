@@ -75,7 +75,7 @@ class SpectreNode:
 
     async def start(self) -> None:
         """Starts the node's TCP server."""
-        self.server = await asyncio.start_server(self._handle_client, self.host, self.port)
+        self.server = await asyncio.start_server(self._handle_client, self.host, self.port, reuse_address=True)
         if self.port == 0 and self.server and self.server.sockets:
             self.port = self.server.sockets[0].getsockname()[1]
         logger.info(f"[{self.name}] Node ({self.role}) running on {self.host}:{self.port}")

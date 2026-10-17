@@ -180,7 +180,7 @@ class SpectreContentServer:
 
     async def start(self) -> None:
         """Starts the content server."""
-        self.server = await asyncio.start_server(self._handle_client, self.host, self.port)
+        self.server = await asyncio.start_server(self._handle_client, self.host, self.port, reuse_address=True)
         logger.info(f"Spectre Content Server running on {self.host}:{self.port}")
 
     async def stop(self) -> None:
