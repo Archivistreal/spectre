@@ -36,9 +36,19 @@ async def send_frame(writer: asyncio.StreamWriter, data: bytes) -> None:
 
 async def read_frame(reader: asyncio.StreamReader) -> bytes:
     """Reads 4-byte big-endian length prefixed data from reader."""
-    header = await reader.readexactly(4)
+    try:
+        header = await reader.readexactly(4)
+    except asyncio.IncompleteReadError as e:
+        if not e.partial:
+            return b""
+        raise ConnectionError(f"Connection closed prematurely while reading frame header ({len(e.partial)}/4 bytes)") from e
+
     length = struct.unpack(">I", header)[0]
-    data = await reader.readexactly(length)
+    try:
+        data = await reader.readexactly(length)
+    except asyncio.IncompleteReadError as e:
+        raise ConnectionError(f"Connection closed prematurely while reading frame payload ({len(e.partial)}/{length} bytes)") from e
+
     return data
 
 
@@ -154,24 +164,35 @@ class SpectreNode:
                 target_port = peeled_cmd["target_port"]
                 target_eph_pub_hex = peeled_cmd["ephemeral_pub"]
 
-                next_reader, next_writer = await asyncio.open_connection(target_host, target_port)
-                circuit["next_writer"] = next_writer
-                circuit["next_reader"] = next_reader
+                try:
+                    next_reader, next_writer = await asyncio.wait_for(
+                        asyncio.open_connection(target_host, target_port), timeout=5.0
+                    )
+                    circuit["next_writer"] = next_writer
+                    circuit["next_reader"] = next_reader
 
-                create_cell = {
-                    "type": "CREATE",
-                    "circuit_id": circuit_id,
-                    "ephemeral_pub": target_eph_pub_hex,
-                }
-                await send_frame(next_writer, json.dumps(create_cell).encode("utf-8"))
+                    create_cell = {
+                        "type": "CREATE",
+                        "circuit_id": circuit_id,
+                        "ephemeral_pub": target_eph_pub_hex,
+                    }
+                    await send_frame(next_writer, json.dumps(create_cell).encode("utf-8"))
 
-                resp_bytes = await read_frame(next_reader)
-                created_cell = json.loads(resp_bytes.decode("utf-8"))
+                    resp_bytes = await read_frame(next_reader)
+                    if not resp_bytes:
+                        raise ConnectionError(f"Target node {target_host}:{target_port} closed connection during handshake")
+                    created_cell = json.loads(resp_bytes.decode("utf-8"))
 
-                extended_payload = json.dumps({
-                    "status": "EXTENDED",
-                    "created_cell": created_cell
-                }).encode("utf-8")
+                    extended_payload = json.dumps({
+                        "status": "EXTENDED",
+                        "created_cell": created_cell
+                    }).encode("utf-8")
+                except Exception as err:
+                    logger.error(f"[{self.name}] Failed to extend circuit to {target_host}:{target_port}: {err}")
+                    extended_payload = json.dumps({
+                        "status": "ERROR",
+                        "error": f"Failed to connect to target node {target_host}:{target_port}: {err}"
+                    }).encode("utf-8")
 
                 encrypted_resp = encrypt_payload(session_key, extended_payload)
                 relay_resp = {
@@ -183,20 +204,27 @@ class SpectreNode:
 
             elif cmd_type == "FORWARD":
                 next_writer = circuit.get("next_writer")
-                if next_writer:
-                    next_payload = peeled_cmd["inner_payload"]
-                    relay_cell = {
-                        "type": "RELAY",
-                        "circuit_id": circuit_id,
-                        "payload": next_payload,
-                    }
-                    await send_frame(next_writer, json.dumps(relay_cell).encode("utf-8"))
+                next_reader = circuit.get("next_reader")
+                if next_writer and next_reader:
+                    try:
+                        next_payload = peeled_cmd["inner_payload"]
+                        relay_cell = {
+                            "type": "RELAY",
+                            "circuit_id": circuit_id,
+                            "payload": next_payload,
+                        }
+                        await send_frame(next_writer, json.dumps(relay_cell).encode("utf-8"))
 
-                    next_reader = circuit["next_reader"]
-                    raw_next_resp = await read_frame(next_reader)
-                    next_resp_cell = json.loads(raw_next_resp.decode("utf-8"))
+                        raw_next_resp = await read_frame(next_reader)
+                        if not raw_next_resp:
+                            raise ConnectionError("Next hop node closed connection unexpectedly")
+                        next_resp_cell = json.loads(raw_next_resp.decode("utf-8"))
+                        inner_resp_bytes = bytes.fromhex(next_resp_cell["payload"])
+                    except Exception as err:
+                        logger.error(f"[{self.name}] Error forwarding cell to next hop: {err}")
+                        err_html = f"SPECTRE/1.0 504 Gateway Timeout\r\nContent-Type: text/html\r\n\r\n<h1>504 Gateway Timeout</h1><p>Relay node failed to communicate with next hop: {err}</p>".encode("utf-8")
+                        inner_resp_bytes = pad_cell(err_html)
 
-                    inner_resp_bytes = bytes.fromhex(next_resp_cell["payload"])
                     enc_resp_bytes = encrypt_payload(session_key, inner_resp_bytes)
 
                     relay_resp = {
@@ -212,12 +240,20 @@ class SpectreNode:
                 padded_req_bytes = bytes.fromhex(peeled_cmd["data_padded"])
                 raw_req = unpad_cell(padded_req_bytes)
 
-                srv_reader, srv_writer = await asyncio.open_connection(target_host, target_port)
-                await send_frame(srv_writer, raw_req)
-                resp_data = await read_frame(srv_reader)
-                srv_writer.close()
+                try:
+                    srv_reader, srv_writer = await asyncio.wait_for(
+                        asyncio.open_connection(target_host, target_port), timeout=5.0
+                    )
+                    await send_frame(srv_writer, raw_req)
+                    resp_data = await read_frame(srv_reader)
+                    if not resp_data:
+                        resp_data = b"SPECTRE/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n"
+                    srv_writer.close()
+                    await srv_writer.wait_closed()
+                except Exception as err:
+                    logger.error(f"[{self.name}] Failed to fetch from target server {target_host}:{target_port}: {err}")
+                    resp_data = f"SPECTRE/1.0 502 Bad Gateway\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE html><html><head><title>502 Bad Gateway</title></head><body style='background-color:#11111b;color:#f38ba8;font-family:sans-serif;padding:20px;'><h1>502 Bad Gateway</h1><p>Spectre Exit Node could not connect to destination content server at <code>{target_host}:{target_port}</code>.</p><p>Error detail: {err}</p><p><a href='spectre.spec' style='color:#89b4fa;'>Return to Home</a></p></body></html>".encode("utf-8")
 
-                # Pad server response to 512-byte cell before returning through onion tunnel
                 padded_resp = pad_cell(resp_data)
                 enc_resp = encrypt_payload(session_key, padded_resp)
 
@@ -265,6 +301,8 @@ class SpectreClientCircuit:
         await send_frame(self.guard_writer, json.dumps(create_cell).encode("utf-8"))
 
         raw_created = await read_frame(self.guard_reader)
+        if not raw_created:
+            raise ConnectionError("Guard node disconnected unexpectedly during handshake")
         created_cell = json.loads(raw_created.decode("utf-8"))
 
         guard_eph_pub = deserialize_x25519_public_key(bytes.fromhex(created_cell["ephemeral_pub"]))
@@ -301,9 +339,13 @@ class SpectreClientCircuit:
         await send_frame(self.guard_writer, json.dumps(relay_cell2).encode("utf-8"))
 
         raw_resp2 = await read_frame(self.guard_reader)
+        if not raw_resp2:
+            raise ConnectionError("Guard node disconnected unexpectedly during circuit extension to Relay")
         resp_cell2 = json.loads(raw_resp2.decode("utf-8"))
         dec_resp2 = decrypt_payload(key1, bytes.fromhex(resp_cell2["payload"]))
         ext_data2 = json.loads(dec_resp2.decode("utf-8"))
+        if ext_data2.get("status") == "ERROR":
+            raise RuntimeError(ext_data2.get("error", "Failed to extend circuit to Relay"))
         created2 = ext_data2["created_cell"]
 
         relay_eph_pub = deserialize_x25519_public_key(bytes.fromhex(created2["ephemeral_pub"]))
@@ -349,9 +391,13 @@ class SpectreClientCircuit:
         await send_frame(self.guard_writer, json.dumps(relay_cell3).encode("utf-8"))
 
         raw_resp3 = await read_frame(self.guard_reader)
+        if not raw_resp3:
+            raise ConnectionError("Guard node disconnected unexpectedly during circuit extension to Exit")
         resp_cell3 = json.loads(raw_resp3.decode("utf-8"))
         unwrapped_resp3 = unwrap_onion_response(bytes.fromhex(resp_cell3["payload"]), [key1, key2])
         ext_data3 = json.loads(unwrapped_resp3.decode("utf-8"))
+        if ext_data3.get("status") == "ERROR":
+            raise RuntimeError(ext_data3.get("error", "Failed to extend circuit to Exit"))
         created3 = ext_data3["created_cell"]
 
         exit_eph_pub = deserialize_x25519_public_key(bytes.fromhex(created3["ephemeral_pub"]))
@@ -417,6 +463,8 @@ class SpectreClientCircuit:
         await send_frame(self.guard_writer, json.dumps(relay_cell).encode("utf-8"))
 
         raw_resp = await read_frame(self.guard_reader)
+        if not raw_resp:
+            raise ConnectionError("Onion network connection closed while waiting for response.")
         resp_cell = json.loads(raw_resp.decode("utf-8"))
 
         unwrapped_padded = unwrap_onion_response(bytes.fromhex(resp_cell["payload"]), self.session_keys)
