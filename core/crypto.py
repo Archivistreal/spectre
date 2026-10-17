@@ -2,6 +2,8 @@ import os
 import struct
 import random
 import math
+import json
+import urllib.request
 from typing import List, Tuple
 from cryptography.hazmat.primitives.asymmetric import ed25519, x25519
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
@@ -11,6 +13,26 @@ from cryptography.exceptions import InvalidSignature, InvalidTag
 
 MIN_CELL_SIZE = 512
 MAX_CELL_SIZE = 1024
+
+
+# --- Quantum Entropy Source Helper ---
+
+def get_quantum_entropy(length: int = 32) -> bytes:
+    """
+    Fetches quantum entropy bytes from ANU QRNG (Vacuum Fluctuations).
+    Falls back gracefully to OS hardware TRNG (os.urandom) if offline or on timeout.
+    """
+    try:
+        url = f"https://qrng.anu.edu.au/API/jsonI.php?length={length}&type=uint8"
+        req = urllib.request.Request(url, headers={"User-Agent": "SpectreProtocol/1.0"})
+        with urllib.request.urlopen(req, timeout=2.0) as resp:
+            if resp.status == 200:
+                data = json.loads(resp.read().decode("utf-8"))
+                if data.get("success") and "data" in data and len(data["data"]) >= length:
+                    return bytes(data["data"][:length])
+    except Exception:
+        pass
+    return os.urandom(length)
 
 
 # --- Variable Cell Padding & Anti-Traffic Analysis Helpers ---
