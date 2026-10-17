@@ -11,7 +11,16 @@ async def test_content_server_pages():
     await server.start()
 
     try:
-        # Request genesis.spectre or genesis.spec
+        # Request spectre.spec (flagship home)
+        reader0, writer0 = await asyncio.open_connection("127.0.0.1", 19088)
+        await send_frame(writer0, b"GET spectre.spec")
+        resp0 = (await read_frame(reader0)).decode("utf-8")
+        writer0.close()
+
+        assert "200 OK" in resp0
+        assert "Official Spectre Network Portal" in resp0
+
+        # Request genesis.spec
         reader, writer = await asyncio.open_connection("127.0.0.1", 19088)
         await send_frame(writer, b"GET genesis.spec")
         resp1 = (await read_frame(reader)).decode("utf-8")

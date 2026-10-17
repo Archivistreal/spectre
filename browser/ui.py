@@ -106,8 +106,8 @@ class SpectreBrowserWindow(QMainWindow):
         nav_layout.addWidget(self.forward_btn)
 
         self.address_bar = QLineEdit()
-        self.address_bar.setPlaceholderText("Enter .spec or .spectre address (e.g. genesis.spec)")
-        self.address_bar.setText("genesis.spec")
+        self.address_bar.setPlaceholderText("Enter .spec address (e.g. spectre.spec)")
+        self.address_bar.setText("spectre.spec")
         self.address_bar.setStyleSheet("padding: 6px; background-color: #1e1e2e; color: #89b4fa; border: 1px solid #45475a; border-radius: 4px; font-weight: bold;")
         self.address_bar.returnPressed.connect(self.load_current_url)
         nav_layout.addWidget(self.address_bar)

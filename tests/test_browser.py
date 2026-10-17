@@ -23,18 +23,18 @@ def test_browser_window_navigation_history():
 
     window._fetch_page = mock_fetch_page
 
-    # Navigate to page 1
-    window.address_bar.setText("page1.spec")
+    # Navigate to page 1 (spectre.spec)
+    window.address_bar.setText("spectre.spec")
     window.load_current_url()
 
-    assert window.history == ["page1.spec"]
+    assert window.history == ["spectre.spec"]
     assert window.history_index == 0
 
-    # Navigate to page 2
-    window.address_bar.setText("page2.spec")
+    # Navigate to page 2 (genesis.spec)
+    window.address_bar.setText("genesis.spec")
     window.load_current_url()
 
-    assert window.history == ["page1.spec", "page2.spec"]
+    assert window.history == ["spectre.spec", "genesis.spec"]
     assert window.history_index == 1
 
     # Test back button

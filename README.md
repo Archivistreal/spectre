@@ -1,6 +1,6 @@
 # Spectre Protocol
 
-An encrypted, 3-hop onion routing network with a PyQt6 GUI desktop browser, local TCP socket daemon nodes, 512-byte fixed cell padding against traffic analysis, and custom HTML `.spec` / `.spectre` content server.
+An encrypted, 3-hop onion routing network with a PyQt6 GUI desktop browser, local TCP socket daemon nodes, 512-byte fixed cell padding against traffic analysis, and native HTML `.spec` website hosting featuring `spectre.spec`.
 
 ---
 
@@ -8,19 +8,20 @@ An encrypted, 3-hop onion routing network with a PyQt6 GUI desktop browser, loca
 
 ```text
 +-------------------+        +----------------+        +----------------+        +---------------+        +----------------------+
-|  PyQt6 HTML Client|        |   Guard Node   |        |   Relay Node   |        |   Exit Node   |        | .spec / .spectre Host|
-|  (Spectre Browser)| ===>   |  (Port 19001)  | ===>   |  (Port 19002)  | ===>   | (Port 19003)  | ===>   | Server (Port 19080)  |
+|  PyQt6 HTML Client|        |   Guard Node   |        |   Relay Node   |        |   Exit Node   |        | .spec Content Server |
+| (spectre.spec)    | ===>   |  (Port 19001)  | ===>   |  (Port 19002)  | ===>   | (Port 19003)  | ===>   | (spectre.spec:19080) |
 +-------------------+        +----------------+        +----------------+        +---------------+        +----------------------+
      Client Circuit           Hop 1 (Outer Layer)      Hop 2 (Middle)            Hop 3 (Inner Layer)      Target Content Server
 ```
 
-### High-Security Features
+### High-Security Features & `.spec` Web Ecosystem
 
-1. **Fixed 512-Byte Cell Padding**: All cells are padded to 512 bytes with random bytes before onion wrapping, preventing side-channel traffic analysis and payload size correlation.
-2. **Anti-Replay Protection**: Sequence counters are embedded into onion commands and tracked per circuit to reject replay attacks.
-3. **In-Place Key Zeroization**: Sensitive session keys and Diffie-Hellman secrets are explicitly zeroized in memory when circuit sessions terminate.
-4. **Cryptographic Primitives**: Ed25519 node identity signatures, ephemeral X25519 Diffie-Hellman key exchanges, HKDF-SHA256 key derivation, and ChaCha20-Poly1305 AEAD multi-layer encryption.
-5. **Full HTML Website Rendering**: Rich HTML `.spec` and `.spectre` websites with inline CSS, links, lists, blockquotes, and formatting rendered in the PyQt6 browser.
+1. **Flagship Website (`spectre.spec`)**: The primary web portal on the Spectre Onion Web hosting protocol specifications, features, and links to `genesis.spec` and `manifesto.spec`.
+2. **Fixed 512-Byte Cell Padding**: All cells are padded to 512 bytes with random padding before onion encryption, preventing side-channel traffic analysis and size correlation.
+3. **Anti-Replay Protection**: Sequence counters are embedded into onion commands and tracked per circuit to reject replay attacks.
+4. **In-Place Key Zeroization**: Sensitive session keys and Diffie-Hellman secrets are explicitly zeroized in memory when circuit sessions terminate.
+5. **Cryptographic Primitives**: Ed25519 node identity signatures, ephemeral X25519 Diffie-Hellman key exchanges, HKDF-SHA256 key derivation, and ChaCha20-Poly1305 AEAD multi-layer encryption.
+6. **Native HTML Website Rendering**: Rich HTML `.spec` websites rendered directly in the PyQt6 browser.
 
 ---
 
@@ -34,15 +35,15 @@ spectre-net/
 │   └── node.py        # Guard, Relay, and Exit daemon nodes with sequence replay protection
 ├── browser/
 │   ├── __init__.py
-│   └── ui.py          # PyQt6 HTML desktop browser client with history and status tracking
+│   └── ui.py          # PyQt6 HTML desktop browser client defaulting to spectre.spec
 ├── server/
 │   ├── __init__.py
-│   └── host.py        # Sample HTML .spec / .spectre content server (genesis.spec, manifesto.spec)
+│   └── host.py        # HTML .spec content server hosting spectre.spec, genesis.spec, and manifesto.spec
 ├── tests/
 │   ├── __init__.py
 │   ├── test_crypto.py # Unit tests for crypto, padding, and zeroize functions
 │   ├── test_circuit.py# Integration tests for 3-hop circuit building
-│   ├── test_server.py # Tests for HTML content server
+│   ├── test_server.py # Tests for spectre.spec and .spec HTML content server
 │   └── test_browser.py# Unit tests for browser navigation history
 ├── main.py            # Entry point CLI (demo mode, browser, daemon nodes, or content server)
 ├── requirements.txt   # Dependencies: PyQt6, cryptography, pytest, pytest-asyncio
@@ -62,7 +63,7 @@ pip install -r requirements.txt
 ## Usage Guide
 
 ### 1. Demo Mode (All-In-One)
-Spins up 3 local daemon nodes (Guard, Relay, Exit), the HTML `.spec` content server, and opens the PyQt6 GUI browser:
+Spins up 3 local daemon nodes (Guard, Relay, Exit), the HTML `.spec` content server, and opens the PyQt6 GUI browser displaying `spectre.spec`:
 ```bash
 python main.py --demo
 ```
