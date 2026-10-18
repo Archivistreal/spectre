@@ -121,8 +121,9 @@ def main():
     parser.add_argument("--browser", action="store_true", help="Launch PyQt6 Browser client")
     parser.add_argument("--server", action="store_true", help="Run Spectre HTML Content Server")
     parser.add_argument("--nodes", action="store_true", help="Spin up 3 daemon nodes locally (Guard, Relay, Exit)")
-    parser.add_argument("--node", action="store_true", help="Run a single daemon node on a server")
-    parser.add_argument("--role", type=str, choices=["guard", "relay", "exit"], default="guard", help="Node role for single daemon node")
+    parser.add_argument("--node", action="store_true", help="Run a daemon node (default: relay node)")
+    parser.add_argument("--join-p2p", action="store_true", help="Join the Spectre P2P Network as a node and auto-discover peers")
+    parser.add_argument("--role", type=str, choices=["guard", "relay", "exit"], default="relay", help="Node role for single daemon node")
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Listen address for server or daemon node")
     parser.add_argument("--port", type=int, default=19001, help="Listen port for server or daemon node")
     parser.add_argument("--guard", type=str, default="127.0.0.1:19001", help="Guard node host:port for browser client")
@@ -140,8 +141,9 @@ def main():
             return h, int(p)
         return addr_str, default_port
 
-    if args.node:
-        asyncio.run(run_single_node(f"{args.role.capitalize()}Node", args.host, args.port, role=args.role))
+    if args.node or args.join_p2p:
+        node_role = args.role if args.role else "relay"
+        asyncio.run(run_single_node(f"P2P_{node_role.capitalize()}Node", args.host, args.port, role=node_role))
     elif args.server:
         asyncio.run(run_server(args.host, args.port if args.port != 19001 else 19080))
     elif args.nodes:

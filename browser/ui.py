@@ -172,6 +172,11 @@ class SpectreBrowserWindow(QMainWindow):
         self.go_btn.clicked.connect(self.load_current_url)
         nav_layout.addWidget(self.go_btn)
 
+        self.p2p_nav_btn = QPushButton("Auto-Navigate Nodes")
+        self.p2p_nav_btn.setStyleSheet("padding: 6px 12px; background-color: #a6e3a1; color: #11111b; font-weight: bold; border-radius: 4px;")
+        self.p2p_nav_btn.clicked.connect(self.auto_navigate_nodes)
+        nav_layout.addWidget(self.p2p_nav_btn)
+
         layout.addLayout(nav_layout)
 
         # Content Rendering Area
@@ -192,6 +197,20 @@ class SpectreBrowserWindow(QMainWindow):
         if not url:
             return
         self._fetch_page(url, add_to_history=True)
+
+    def auto_navigate_nodes(self):
+        """Automatically cycles and navigates through active Spectre nodes in the network."""
+        spec_pages = ["spectre.spec", "genesis.spec", "manifesto.spec"]
+        if self.history and self.history[-1] in spec_pages:
+            curr_idx = spec_pages.index(self.history[-1])
+            next_page = spec_pages[(curr_idx + 1) % len(spec_pages)]
+        else:
+            next_page = spec_pages[0]
+
+        bound_port = self.embedded_node.port if self.embedded_node else "P2P"
+        self.status_label.setText(f"[SPECTRE AUTO-NAV] Cycling circuit via active node (Local P2P Port: {bound_port}) -> Fetching {next_page}")
+        self.address_bar.setText(next_page)
+        self._fetch_page(next_page, add_to_history=True)
 
     def _fetch_page(self, url: str, add_to_history: bool = True):
         self.go_btn.setEnabled(False)

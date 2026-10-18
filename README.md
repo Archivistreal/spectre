@@ -16,9 +16,9 @@ An encrypted, 3-hop onion routing network with a PyQt6 GUI desktop browser, embe
 
 ---
 
-## Embedded P2P Browser Node Participation
+## Embedded P2P Browser Node Participation & Auto-Navigation
 
-Every user who launches the Spectre Browser (`python main.py --browser`) automatically spins up an embedded background Relay Node. This ensures every browser user contributes relay capacity to the network, increasing decentralization and anonymity set size across the Spectre Onion Web.
+Every user who launches the Spectre Browser (`python main.py --browser`) automatically spins up an embedded background Relay Node. You can also run a standalone P2P node with `python main.py --node` or `python main.py --join-p2p`. The browser features an "Auto-Navigate Nodes" button to automatically cycle and navigate through active nodes across `.spec` sites in the network.
 
 ---
 
