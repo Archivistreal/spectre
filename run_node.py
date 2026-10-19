@@ -4,10 +4,15 @@ Spectre Protocol - Standalone Node Script
 Run this script to immediately join the Spectre P2P Onion Network as a node.
 """
 
+import os
 import sys
 import argparse
 import asyncio
 import logging
+
+# Ensure project root is in sys.path when script is executed directly
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from core.node import SpectreNode
 
 

@@ -1,8 +1,14 @@
+import os
+import sys
 import asyncio
 import json
 import struct
 import logging
 from typing import Dict, Optional, Tuple, List, Set
+
+# Ensure parent root directory is in sys.path if module is loaded directly
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from core.crypto import (
     generate_identity_keypair,
     serialize_ed25519_public_key,
