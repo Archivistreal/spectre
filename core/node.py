@@ -79,6 +79,12 @@ class SpectreNode:
         # Replay protection: circuit_id -> set of processed sequence numbers
         self.seen_sequences: Dict[str, Set[int]] = {}
 
+        # Telemetry & Live Visitor Stats
+        self.total_cells_processed: int = 0
+        self.total_bytes_processed: int = 0
+        self.active_visitors: Set[str] = set()
+        self.visitor_log: List[dict] = []
+
     async def start(self) -> None:
         """Starts the node's TCP server."""
         self.server = await asyncio.start_server(self._handle_client, self.host, self.port, reuse_address=True)
@@ -98,20 +104,29 @@ class SpectreNode:
 
     async def _handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         """Handles incoming TCP connections to this node."""
+        peer_addr = writer.get_extra_info("peername")
+        peer_str = f"{peer_addr[0]}:{peer_addr[1]}" if peer_addr else "Unknown_Peer"
+        self.active_visitors.add(peer_str)
+        logger.info(f"[{self.name}] New inbound node connection from visitor {peer_str}")
+
         try:
             while True:
                 data = await read_frame(reader)
                 if not data:
                     break
-                await self._process_cell(data, reader, writer)
+                self.total_cells_processed += 1
+                self.total_bytes_processed += len(data)
+                await self._process_cell(data, reader, writer, peer_str)
         except (asyncio.IncompleteReadError, ConnectionResetError):
             pass
         except Exception as e:
-            logger.error(f"[{self.name}] Error handling client: {e}")
+            logger.error(f"[{self.name}] Error handling client {peer_str}: {e}")
         finally:
+            self.active_visitors.discard(peer_str)
+            logger.info(f"[{self.name}] Connection closed from visitor {peer_str}")
             writer.close()
 
-    async def _process_cell(self, raw_data: bytes, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+    async def _process_cell(self, raw_data: bytes, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, peer_str: str = "Unknown") -> None:
         """Processes a single incoming wire cell."""
         cell = json.loads(raw_data.decode("utf-8"))
         cell_type = cell.get("type")
@@ -132,10 +147,12 @@ class SpectreNode:
             self.circuits[circuit_id] = {
                 "session_key": session_key,
                 "upstream_writer": writer,
+                "visitor_peer": peer_str,
                 "next_writer": None,
                 "next_reader": None,
             }
             self.seen_sequences[circuit_id] = set()
+            print(f"  [VISITOR ACTIVITY] Visitor {peer_str} initiated onion circuit {circuit_id}")
 
             resp = {
                 "type": "CREATED",
@@ -248,6 +265,9 @@ class SpectreNode:
                 target_port = peeled_cmd["target_port"]
                 padded_req_bytes = bytes.fromhex(peeled_cmd["data_padded"])
                 raw_req = unpad_cell(padded_req_bytes)
+
+                req_summary = raw_req.decode("utf-8", errors="ignore").splitlines()[0] if raw_req else "DATA"
+                print(f"  [DESTINATION REQUEST] Visitor {peer_str} requested destination {target_host}:{target_port} -> Payload: {req_summary[:50]}")
 
                 try:
                     srv_reader, srv_writer = await asyncio.wait_for(

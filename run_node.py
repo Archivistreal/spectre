@@ -39,6 +39,13 @@ async def main():
     node_name = args.name or f"SpectreNode_{args.role.capitalize()}_{args.port}"
     node = SpectreNode(node_name, args.host, args.port, role=args.role)
 
+    async def stats_reporter():
+        while True:
+            await asyncio.sleep(5)
+            visitors_str = ", ".join(node.active_visitors) if node.active_visitors else "None"
+            kb_processed = node.total_bytes_processed / 1024.0
+            print(f"[NODE STATS] Role: {node.role.upper()} | Port: {node.port} | Active Circuits: {len(node.circuits)} | Active Visitors: {len(node.active_visitors)} ({visitors_str}) | Cells Routed: {node.total_cells_processed} ({kb_processed:.2f} KB)")
+
     try:
         await node.start()
         print(f"\n=======================================================")
@@ -46,9 +53,10 @@ async def main():
         print(f" Address: tcp://{args.host}:{node.port}")
         print(f" Identity PubKey: {node.identity_pub_bytes.hex()[:16]}...")
         print(f" Status: Ready for Onion Circuit connections")
+        print(f" Live Stats Reporter Active (printing every 5s)")
         print(f"=======================================================\n")
-        print("Press Ctrl+C to stop node...")
 
+        reporter_task = asyncio.create_task(stats_reporter())
         await asyncio.Event().wait()
     except KeyboardInterrupt:
         print("\nStopping Spectre Node...")
