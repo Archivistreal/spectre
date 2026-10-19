@@ -86,11 +86,36 @@ class SpectreNode:
         self.visitor_log: List[dict] = []
 
     async def start(self) -> None:
-        """Starts the node's TCP server."""
-        self.server = await asyncio.start_server(self._handle_client, self.host, self.port, reuse_address=True)
-        if self.port == 0 and self.server and self.server.sockets:
-            self.port = self.server.sockets[0].getsockname()[1]
-        logger.info(f"[{self.name}] Node ({self.role}) running on {self.host}:{self.port}")
+        """Starts the node's TCP server with automatic port fallback if port is in use."""
+        target_port = self.port
+        max_attempts = 50 if target_port != 0 else 1
+
+        for offset in range(max_attempts):
+            candidate_port = target_port + offset if target_port != 0 else 0
+            try:
+                try:
+                    self.server = await asyncio.start_server(
+                        self._handle_client, self.host, candidate_port, reuse_address=True, reuse_port=True
+                    )
+                except (TypeError, OSError):
+                    # Fallback without reuse_port if OS platform does not support SO_REUSEPORT
+                    self.server = await asyncio.start_server(
+                        self._handle_client, self.host, candidate_port, reuse_address=True
+                    )
+
+                self.port = candidate_port
+                if self.port == 0 and self.server and self.server.sockets:
+                    self.port = self.server.sockets[0].getsockname()[1]
+
+                if offset > 0:
+                    logger.warning(f"[{self.name}] Requested port {target_port} in use. Successfully bound to fallback port {self.port}")
+
+                logger.info(f"[{self.name}] Node ({self.role}) running on {self.host}:{self.port}")
+                return
+            except OSError as err:
+                if err.errno in (98, 48, 10048) and offset < max_attempts - 1:
+                    continue
+                raise
 
     async def stop(self) -> None:
         """Stops the node's TCP server and closes all active circuits."""

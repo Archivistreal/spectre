@@ -179,9 +179,28 @@ class SpectreContentServer:
         }
 
     async def start(self) -> None:
-        """Starts the content server."""
-        self.server = await asyncio.start_server(self._handle_client, self.host, self.port, reuse_address=True)
-        logger.info(f"Spectre Content Server running on {self.host}:{self.port}")
+        """Starts the content server with fallback if port in use."""
+        target_port = self.port
+        max_attempts = 20 if target_port != 0 else 1
+
+        for offset in range(max_attempts):
+            candidate_port = target_port + offset if target_port != 0 else 0
+            try:
+                try:
+                    self.server = await asyncio.start_server(
+                        self._handle_client, self.host, candidate_port, reuse_address=True, reuse_port=True
+                    )
+                except (TypeError, OSError):
+                    self.server = await asyncio.start_server(
+                        self._handle_client, self.host, candidate_port, reuse_address=True
+                    )
+                self.port = candidate_port
+                logger.info(f"Spectre Content Server running on {self.host}:{self.port}")
+                return
+            except OSError as err:
+                if err.errno in (98, 48, 10048) and offset < max_attempts - 1:
+                    continue
+                raise
 
     async def stop(self) -> None:
         """Stops the content server."""
