@@ -39,9 +39,29 @@ class SpectreNetworkWorker(QThread):
     def run(self):
         asyncio.run(self._execute_request())
 
+    async def _auto_discover_circuit_nodes(self) -> Tuple[Tuple[str, int], Tuple[str, int], Tuple[str, int]]:
+        """Automatically probes local/network ports to discover active Spectre nodes."""
+        active_nodes = []
+        for port in range(19001, 19015):
+            try:
+                r, w = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", port), timeout=0.2)
+                w.close()
+                await w.wait_closed()
+                active_nodes.append(("127.0.0.1", port))
+            except Exception:
+                pass
+
+        if len(active_nodes) >= 3:
+            return active_nodes[0], active_nodes[1], active_nodes[2]
+
+        return self.guard_addr, self.relay_addr, self.exit_addr
+
     async def _execute_request(self):
         try:
-            circuit = SpectreClientCircuit(self.guard_addr, self.relay_addr, self.exit_addr)
+            guard, relay, exit_node = await self._auto_discover_circuit_nodes()
+            self.status_updated.emit(f"Auto-Discovered 3 Nodes: Guard({guard[1]}) -> Relay({relay[1]}) -> Exit({exit_node[1]})")
+
+            circuit = SpectreClientCircuit(guard, relay, exit_node)
             try:
                 self.status_updated.emit("Establishing 3-Hop Padded Circuit (Guard -> Relay -> Exit)...")
                 await circuit.build_circuit()
