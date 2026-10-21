@@ -152,12 +152,15 @@ DEFAULT_404_HTML = """<!DOCTYPE html>
 """
 
 
+import os
+
 class SpectreContentServer:
     """TCP Content Server serving HTML .spec / .spectre documents."""
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 19080):
+    def __init__(self, host: str = "127.0.0.1", port: int = 19080, web_dir: Optional[str] = None):
         self.host = host
         self.port = port
+        self.web_dir = web_dir
         self.server: Optional[asyncio.Server] = None
         self.pages = {
             "spectre.spec": SPECTRE_SPEC_HTML,
@@ -168,6 +171,54 @@ class SpectreContentServer:
             "manifesto.spectre": MANIFESTO_HTML,
             "/": SPECTRE_SPEC_HTML,
         }
+
+    def register_page(self, page_name: str, html_content: str) -> None:
+        """Registers a custom HTML page dynamically by site name."""
+        clean_name = page_name.lstrip("/")
+        self.pages[clean_name] = html_content
+        if not clean_name.endswith(".spec") and not clean_name.endswith(".spectre"):
+            self.pages[f"{clean_name}.spec"] = html_content
+            self.pages[f"{clean_name}.spectre"] = html_content
+
+    def register_site_file(self, page_name: str, filepath: str) -> None:
+        """Registers a custom site from a local file path."""
+        if not os.path.isfile(filepath):
+            raise FileNotFoundError(f"Site file not found: {filepath}")
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+        self.register_page(page_name, content)
+
+    def _resolve_web_file(self, requested_page: str) -> Optional[str]:
+        """Resolves requested page from web_dir with path traversal protection."""
+        if not self.web_dir or not os.path.isdir(self.web_dir):
+            return None
+
+        base_dir = os.path.abspath(self.web_dir)
+        clean_path = os.path.normpath(requested_page)
+        if clean_path.startswith("..") or os.path.isabs(clean_path):
+            return None
+
+        candidates = [clean_path]
+        if clean_path.endswith(".spec"):
+            stem = clean_path[:-5]
+            candidates.extend([f"{stem}.html", f"{stem}.htm"])
+        elif clean_path.endswith(".spectre"):
+            stem = clean_path[:-8]
+            candidates.extend([f"{stem}.html", f"{stem}.htm"])
+        elif clean_path.endswith(".html") or clean_path.endswith(".htm"):
+            pass
+        else:
+            candidates.extend([f"{clean_path}.spec", f"{clean_path}.spectre", f"{clean_path}.html", f"{clean_path}.htm"])
+
+        for cand in candidates:
+            target_path = os.path.abspath(os.path.join(base_dir, cand))
+            if target_path.startswith(base_dir) and os.path.isfile(target_path):
+                try:
+                    with open(target_path, "r", encoding="utf-8", errors="ignore") as f:
+                        return f.read()
+                except Exception as e:
+                    logger.error(f"Error reading site file {target_path}: {e}")
+        return None
 
     async def start(self) -> None:
         """Starts the content server."""
@@ -194,6 +245,9 @@ class SpectreContentServer:
             page_content = self.pages.get(requested_page)
             if not page_content and not requested_page:
                 page_content = SPECTRE_SPEC_HTML
+
+            if not page_content:
+                page_content = self._resolve_web_file(requested_page)
 
             if page_content:
                 response = f"SPECTRE/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n{page_content}"
