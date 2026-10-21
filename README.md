@@ -41,9 +41,37 @@ python main.py --node --role relay --host 0.0.0.0 --port 19002
 python main.py --node --role exit --host 0.0.0.0 --port 19003
 ```
 
-### 4. Server 4 (Content Server hosting spectre.spec):
+### 4. Server 4 (Content Server hosting spectre.spec & custom .spec sites):
 ```bash
 python main.py --server --host 0.0.0.0 --port 19080
+```
+
+---
+
+## Anonymous Website Hosting (.spec Websites)
+
+You can host custom `.spec` or `.html` websites anonymously on the Spectre Content Server Network. All client requests to hosted websites flow strictly over the 3-hop onion circuit (`User -> Guard Node -> Relay Node -> Exit Node -> Content Server/Website`), preserving anonymity for both visitors and site hosts.
+
+### Method 1: Directory Hosting (`--web-dir`)
+Place your `.spec` or `.html` website files inside a folder (e.g. `./my_sites/`) and run the Content Server with `--web-dir`:
+
+```bash
+python main.py --server --web-dir ./my_sites --port 19080
+```
+Any file in `./my_sites/` (such as `crypto.spec` or `anon.html`) can be loaded in the browser as `crypto.spec` or `anon.spec`.
+
+### Method 2: Single Site File Hosting (`--host-site`)
+Host a specific local HTML file mapped to a custom `.spec` domain:
+
+```bash
+python main.py --server --host-site "mysite.spec=./path/to/index.html" --port 19080
+```
+
+### Method 3: Local All-In-One Demo with Custom Site
+Test your custom hosted site in local demo mode:
+
+```bash
+python main.py --demo --host-site "secret.spec=./secret.html"
 ```
 
 ### 5. Client Machine (PyQt6 Browser & Embedded P2P Node):

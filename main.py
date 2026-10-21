@@ -48,8 +48,16 @@ async def run_nodes(roles: List[str], host: str = "127.0.0.1", base_port: int = 
             await node.stop()
 
 
-async def run_server(host: str = "0.0.0.0", port: int = 19080):
-    server = SpectreContentServer(host, port)
+from typing import Optional, List
+
+async def run_server(host: str = "0.0.0.0", port: int = 19080, web_dir: Optional[str] = None, host_site: Optional[str] = None):
+    server = SpectreContentServer(host, port, web_dir=web_dir)
+    if host_site:
+        if "=" in host_site:
+            site_name, filepath = host_site.split("=", 1)
+        else:
+            site_name, filepath = host_site, host_site
+        server.register_site_file(site_name, filepath)
     await server.start()
     logging.info(f"Spectre HTML Content Server active on tcp://{host}:{port}. Press Ctrl+C to stop.")
     try:
@@ -60,7 +68,7 @@ async def run_server(host: str = "0.0.0.0", port: int = 19080):
         await server.stop()
 
 
-def start_demo_mode():
+def start_demo_mode(web_dir: Optional[str] = None, host_site: Optional[str] = None):
     from PyQt6.QtWidgets import QApplication
     from browser.ui import SpectreBrowserWindow
 
@@ -72,7 +80,13 @@ def start_demo_mode():
         guard = SpectreNode("GuardNode", "127.0.0.1", 19001, role="guard")
         relay = SpectreNode("RelayNode", "127.0.0.1", 19002, role="relay")
         exit_node = SpectreNode("ExitNode", "127.0.0.1", 19003, role="exit")
-        server = SpectreContentServer("127.0.0.1", 19080)
+        server = SpectreContentServer("127.0.0.1", 19080, web_dir=web_dir)
+        if host_site:
+            if "=" in host_site:
+                sname, fpath = host_site.split("=", 1)
+            else:
+                sname, fpath = host_site, host_site
+            server.register_site_file(sname, fpath)
 
         await guard.start()
         await relay.start()
@@ -129,6 +143,8 @@ def main():
     parser.add_argument("--relay", type=str, default="127.0.0.1:19002", help="Relay node host:port for browser client")
     parser.add_argument("--exit-node", type=str, default="127.0.0.1:19003", help="Exit node host:port for browser client")
     parser.add_argument("--content-server", type=str, default="127.0.0.1:19080", help="Content server host:port for browser client")
+    parser.add_argument("--web-dir", type=str, default=None, help="Directory path containing custom .spec/.html site files to serve")
+    parser.add_argument("--host-site", type=str, default=None, help="Host a custom site file (format: 'sitename.spec=file.html' or 'file.spec')")
     parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose debug logging")
 
     args = parser.parse_args()
@@ -143,7 +159,7 @@ def main():
     if args.node:
         asyncio.run(run_single_node(f"{args.role.capitalize()}Node", args.host, args.port, role=args.role))
     elif args.server:
-        asyncio.run(run_server(args.host, args.port if args.port != 19001 else 19080))
+        asyncio.run(run_server(args.host, args.port if args.port != 19001 else 19080, web_dir=args.web_dir, host_site=args.host_site))
     elif args.nodes:
         asyncio.run(run_nodes(["guard", "relay", "exit"], host=args.host if args.host != "0.0.0.0" else "127.0.0.1"))
     elif args.browser:
@@ -159,7 +175,7 @@ def main():
         browser.show()
         sys.exit(app.exec())
     elif args.demo or len(sys.argv) == 1:
-        start_demo_mode()
+        start_demo_mode(web_dir=args.web_dir, host_site=args.host_site)
 
 
 if __name__ == "__main__":
